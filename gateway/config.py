@@ -5,6 +5,27 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 
+def _normalize_prefix(prefix: str) -> str:
+    """Canonical route-prefix form: no trailing slash except for root."""
+    if len(prefix) > 1:
+        return prefix.rstrip("/") or "/"
+    return prefix
+
+
+def _prefix_matches(prefix: str, path: str) -> bool:
+    """Segment-aware prefix match.
+
+    ``/v1/report`` matches ``/v1/report`` and ``/v1/report/x`` but not
+    ``/v1/reporter``: the next path character after the match must be a
+    segment separator, not another word character.
+    """
+    if prefix == "/":
+        return True
+    if path == prefix:
+        return True
+    return path.startswith(prefix + "/")
+
+
 class BalanceStrategy(str, Enum):
     ROUND_ROBIN = "round_robin"
     RANDOM = "random"
@@ -55,12 +76,18 @@ class GatewayConfig:
         return None
 
     def route_for(self, path: str) -> RouteConfig | None:
-        # Longest prefix wins so that more specific routes take precedence.
+        # Longest *segment-aware* prefix wins so that more specific routes take
+        # precedence. A prefix only matches on a path-segment boundary:
+        # "/v1/report" matches "/v1/report" and "/v1/report/x" but never
+        # "/v1/reporter" (adjacent spelling, different resource).
         best: RouteConfig | None = None
+        best_len = -1
         for route in self.routes:
-            if path.startswith(route.path_prefix):
-                if best is None or len(route.path_prefix) > len(best.path_prefix):
-                    best = route
+            prefix = _normalize_prefix(route.path_prefix)
+            if not _prefix_matches(prefix, path):
+                continue
+            if len(prefix) > best_len:
+                best, best_len = route, len(prefix)
         return best
 
     def rate_limit_for(self, caller: str) -> RateLimitConfig:
