@@ -34,10 +34,8 @@ class ForwardResult:
 
 class Forwarder:
     def __init__(self, health: HealthTracker,
-                 selector: UpstreamSelector,
                  client: httpx.Client | None = None) -> None:
         self._health = health
-        self._selector = selector
         self._client = client or httpx.Client()
         self._owns_client = client is None
 
@@ -47,7 +45,10 @@ class Forwarder:
 
     def forward(self, route: RouteConfig, method: str, path: str,
                 headers: dict[str, str], content: bytes,
-                query: str = "") -> ForwardResult:
+                query: str = "",
+                selector: UpstreamSelector | None = None) -> ForwardResult:
+        if selector is None:
+            raise ValueError("selector must be provided by the active snapshot")
         method = method.upper()
         attempts_limit = (
             route.max_retries + 1
@@ -62,7 +63,7 @@ class Forwarder:
             # Only a replayable request may be used as a recovery probe when
             # every known upstream is unhealthy. Already-tried upstreams are
             # excluded so a retry can never replay against the same node.
-            pick = self._selector.pick(
+            pick = selector.pick(
                 route,
                 allow_probe=method in SAFE_METHODS,
                 exclude=frozenset(tried),

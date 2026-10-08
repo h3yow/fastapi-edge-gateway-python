@@ -6,11 +6,30 @@ why a request was accepted, rejected or served from cache.
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import logging
 import sys
-from typing import Any
+from typing import Any, Iterator
 
 _LOGGER_NAME = "edge_gateway"
+
+# Request-scoped decision fields (e.g. the pinned config revision/version).
+# Every decision emitted while the scope is active is annotated with them,
+# including logs produced deep inside the cache/limiter/forwarder, so test
+# output can show which generation of the rules each request used.
+_scope: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar(
+    "decision_scope", default={}
+)
+
+
+@contextlib.contextmanager
+def decision_scope(**fields: Any) -> Iterator[None]:
+    token = _scope.set({**_scope.get(), **fields})
+    try:
+        yield
+    finally:
+        _scope.reset(token)
 
 
 def get_logger() -> logging.Logger:
@@ -26,7 +45,8 @@ def get_logger() -> logging.Logger:
 
 def log_decision(kind: str, **fields: Any) -> None:
     """Emit one structured decision record, e.g. kind='upstream_select'."""
-    parts = " ".join(f"{k}={_quote(v)}" for k, v in fields.items())
+    merged = {**_scope.get(), **fields}
+    parts = " ".join(f"{k}={_quote(v)}" for k, v in merged.items())
     get_logger().info("decision=%s %s", kind, parts)
 
 

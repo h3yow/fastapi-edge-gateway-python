@@ -33,8 +33,9 @@ class UpstreamNode:
         return httpx.get(self.base_url + path, timeout=5, **kwargs)
 
 
-def start_node(name: str) -> UpstreamNode:
-    port = _free_port()
+def start_node(name: str, port: int | None = None) -> UpstreamNode:
+    if port is None:
+        port = _free_port()
     app = create_upstream_app(name)
     config = uvicorn.Config(
         app, host="127.0.0.1", port=port, log_level="error", lifespan="off"

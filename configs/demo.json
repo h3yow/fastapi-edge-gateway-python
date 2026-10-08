@@ -1,0 +1,37 @@
+{
+  "version": "demo-built-in-equivalent-r1",
+  "defaults": {
+    "rate_per_sec": 20,
+    "burst": 20,
+    "max_concurrency": 10
+  },
+  "upstreams": [
+    {"name": "u1", "base_url": "http://127.0.0.1:19091",
+     "weight": 1, "fail_threshold": 1, "recover_threshold": 1},
+    {"name": "u2", "base_url": "http://127.0.0.1:19092",
+     "weight": 1, "fail_threshold": 1, "recover_threshold": 1}
+  ],
+  "routes": [
+    {"name": "echo", "path_prefix": "/api/", "upstreams": ["u1", "u2"],
+     "strategy": "round_robin", "strip_prefix": "/api",
+     "cache_ttl_ms": 2000, "timeout_ms": 800, "max_retries": 2},
+    {"name": "effects", "path_prefix": "/effects", "upstreams": ["u1", "u2"],
+     "strategy": "round_robin", "strip_prefix": "/effects",
+     "cache_ttl_ms": 0, "timeout_ms": 800, "max_retries": 2},
+    {"name": "slow", "path_prefix": "/slow", "upstreams": ["u1", "u2"],
+     "strategy": "round_robin",
+     "cache_ttl_ms": 0, "timeout_ms": 300, "max_retries": 1},
+    {"name": "hold", "path_prefix": "/hold", "upstreams": ["u1", "u2"],
+     "strategy": "round_robin",
+     "cache_ttl_ms": 0, "timeout_ms": 1500, "max_retries": 0},
+    {"name": "fail", "path_prefix": "/fail", "upstreams": ["u1", "u2"],
+     "strategy": "round_robin",
+     "cache_ttl_ms": 0, "timeout_ms": 800, "max_retries": 2}
+  ],
+  "rate_limits": [
+    {"caller": "premium", "rate_per_sec": 100, "burst": 100,
+     "max_concurrency": 20},
+    {"caller": "burst-demo", "rate_per_sec": 2, "burst": 5,
+     "max_concurrency": 3}
+  ]
+}
